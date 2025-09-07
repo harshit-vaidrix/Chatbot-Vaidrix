@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat with Vaidrix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+
+  <style>
+    body {
+      background-color: #0b0f1a;
+      color: #f5f5f5;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .card {
+      background-color: #141a26;
+      border: none;
+      border-radius: 15px;
+      box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-header {
+      background-color: #ff6600;
+      border-top-left-radius: 15px;
+      border-top-right-radius: 15px;
+    }
+
+    .card-header h4 {
+      margin: 0;
+      font-weight: bold;
+    }
+
+    #chat-window {
+      height: 400px;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .bot-message {
+      background-color: #1e2635;
+      color: #fff;
+      border-radius: 12px;
+      padding: 10px 15px;
+      max-width: 75%;
+    }
+
+    .user-message {
+      background-color: #ff6600;
+      color: #fff;
+      border-radius: 12px;
+      padding: 10px 15px;
+      max-width: 75%;
+    }
+
+    .input-group input {
+      background-color: #1e2635;
+      border: none;
+      color: #fff;
+    }
+
+    .input-group input:focus {
+      background-color: #1e2635;
+      color: #fff;
+      outline: none;
+      box-shadow: none;
+    }
+
+    .btn-primary {
+      background-color: #ff6600;
+      border: none;
+      font-weight: bold;
+    }
+
+    .btn-primary:hover {
+      background-color: #e65c00;
+    }
+
+    #chat-window::-webkit-scrollbar {
+      display: none;
+    }
+    .typing {
+      display: inline-block;
+    }
+
+    .typing span {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin: 0 2px;
+      background: #fff;
+      border-radius: 50%;
+      animation: blink 1.4s infinite both;
+    }
+
+    .typing span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes blink {
+      0% {
+        opacity: 0.2;
+      }
+      20% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0.2;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header text-white">
+            <h4>Chat with Vaidrix</h4>
+          </div>
+          <div class="card-body" id="chat-window"></div>
+          <div class="card-footer">
+            <div class="input-group">
+              <input type="text" id="query" class="form-control" name="query" placeholder="Ask a question..." required>
+              <button id="fetchBtn" class="btn btn-primary" type="button">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const fetchBtn = document.getElementById("fetchBtn");
+      const queryInput = document.getElementById("query");
+      const resultDiv = document.getElementById("chat-window");
+
+      const botGreeting = "Hello! I'm Vaidrix, your virtual assistant. How can I help you today?";
+      resultDiv.innerHTML = `        
+        <div class="d-flex justify-content-start mb-2">
+          <div class="bot-message">
+            <strong>Vaidrix:</strong> ${botGreeting}
+          </div>
+        </div>
+      `;
+
+      fetchBtn.addEventListener('click', sendMessage);
+      queryInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+
+      function sendMessage() {
+        const query = queryInput.value.trim();
+        if (!query) return;
+
+        resultDiv.innerHTML += `<div class="d-flex justify-content-end mb-2">
+                        <div class="user-message">
+                          <strong>You:</strong> ${query}
+                        </div>
+                      </div>`;
+        
+        const typingIndicator = document.createElement("div");
+        typingIndicator.className = "d-flex justify-content-start mb-2 typing-indicator";
+        typingIndicator.innerHTML = `
+          <div class="bot-message">
+            <strong>Vaidrix:</strong> <span class="typing"><span></span><span></span><span></span></span>
+          </div>`;
+        resultDiv.appendChild(typingIndicator);
+        scrollToBottom();
+
+        queryInput.value = "";
+
+        setTimeout(() => {
+          fetch('/ask', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query: query })
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.error) {
+                alert(data.error);
+              } else {
+                updateChatWindow(data);
+                scrollToBottom();
+              }
+            })
+            .catch(error => alert('Error: ' + error));
+        }, 500);  
+      }
+
+      function updateChatWindow(data) {
+        let chatHtml = '';
+
+        if (data.bot_greeting || data.conversation_history) {
+          if (data.bot_greeting) {
+            chatHtml += `<div class="d-flex justify-content-start mb-2">
+                          <div class="bot-message">
+                            <strong>Vaidrix:</strong> ${data.bot_greeting}
+                          </div>
+                        </div>`;
+          }
+
+          if (data.conversation_history) {
+            data.conversation_history.forEach(message => {
+              if (message.role === 'bot') {
+                chatHtml += `<div class="d-flex justify-content-start mb-2">
+                              <div class="bot-message">
+                                <strong>Vaidrix:</strong> ${message.content}
+                              </div>
+                            </div>`;
+              } else {
+                chatHtml += `<div class="d-flex justify-content-end mb-2">
+                              <div class="user-message">
+                                <strong>You:</strong> ${message.content}
+                              </div>
+                            </div>`;
+              }
+            });
+          }
+        }
+
+        resultDiv.innerHTML = chatHtml;
+      }
+
+      function scrollToBottom() {
+        resultDiv.scrollTop = resultDiv.scrollHeight;
+      }
+    });
+  </script>
+</body>
+
+</html>
